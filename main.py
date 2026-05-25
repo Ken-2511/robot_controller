@@ -5,20 +5,22 @@ import pygame
 import math
 
 
-def main_pd() -> None:
+def main_pd(reference_angle_rad: float) -> None:
+    """
+    PD Controller with a constant reference angle.
+    """
     canvas_size = 800
     pendulum_length_m = 1.0
     px_per_meter = 300
     render_hz = 60
     sim_hz = 3000
     steps_per_frame = sim_hz // render_hz
-    reference_angle_rad = math.pi / 2
 
     pygame.init()
     pygame.display.set_caption("Pendulum Simulation")
     screen = pygame.display.set_mode((canvas_size, canvas_size))
     clock = pygame.time.Clock()
-    font = pygame.font.SysFont("consolas", 22)
+    font = pygame.font.SysFont("consolas", 16)
 
     pen = Pendulum(
         mass=1.0,
@@ -41,14 +43,22 @@ def main_pd() -> None:
     )
 
     running = True
+    controller_enabled = True
     painter.set_reference_angle(reference_angle_rad)
+    painter.set_controller_enabled(controller_enabled)
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                controller_enabled = not controller_enabled
+                painter.set_controller_enabled(controller_enabled)
 
         for _ in range(steps_per_frame):
-            tau = controller.compute_torque(pen.q, pen.qd, reference_angle_rad)
+            if controller_enabled:
+                tau = controller.compute_torque(pen.q, pen.qd, reference_angle_rad)
+            else:
+                tau = 0.0
             qdd = pen.equ_of_motion(tau=tau)
             pen.qd += qdd / sim_hz
             pen.q += pen.qd / sim_hz
@@ -75,7 +85,7 @@ def main_computed_torque() -> None:
     pygame.display.set_caption("Pendulum Simulation")
     screen = pygame.display.set_mode((canvas_size, canvas_size))
     clock = pygame.time.Clock()
-    font = pygame.font.SysFont("consolas", 22)
+    font = pygame.font.SysFont("consolas", 16)
 
     pen = Pendulum(
         mass=1.0,
@@ -98,12 +108,17 @@ def main_computed_torque() -> None:
     )
 
     running = True
+    controller_enabled = True
+    painter.set_controller_enabled(controller_enabled)
     frame = 0
     qr = 0.0
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                controller_enabled = not controller_enabled
+                painter.set_controller_enabled(controller_enabled)
 
         for step in range(steps_per_frame):
 
@@ -117,7 +132,10 @@ def main_computed_torque() -> None:
             qrd = math.pi / 6 * w * math.cos(w * t)
             qrdd = - math.pi / 6 * w * w * math.sin(w * t)
 
-            tau = controller.compute_torque(pen.q, pen.qd, qr, qrd, qrdd)
+            if controller_enabled:
+                tau = controller.compute_torque(pen.q, pen.qd, qr, qrd, qrdd)
+            else:
+                tau = 0.0
 
             qdd = pen.equ_of_motion(tau=tau)
             pen.qd += qdd / sim_hz
@@ -136,4 +154,4 @@ def main_computed_torque() -> None:
 
 
 if __name__ == "__main__":
-    main_computed_torque()
+    main_pd(reference_angle_rad=math.pi)
