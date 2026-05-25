@@ -41,18 +41,20 @@ def main_pd(reference_angle_rad: float) -> None:
         swing_radius_m=pendulum_length_m,
         px_per_meter=px_per_meter,
     )
+    painter.set_instruction_text(f"SPACE toggles controller | click sets reference")
 
     running = True
     controller_enabled = True
     painter.set_reference_angle(reference_angle_rad)
-    painter.set_controller_enabled(controller_enabled)
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 controller_enabled = not controller_enabled
-                painter.set_controller_enabled(controller_enabled)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                reference_angle_rad = painter.angle_from_position(event.pos)
+                painter.set_reference_angle(reference_angle_rad)
 
         for _ in range(steps_per_frame):
             if controller_enabled:
@@ -109,7 +111,6 @@ def main_computed_torque() -> None:
 
     running = True
     controller_enabled = True
-    painter.set_controller_enabled(controller_enabled)
     frame = 0
     qr = 0.0
     while running:
@@ -118,7 +119,6 @@ def main_computed_torque() -> None:
                 running = False
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 controller_enabled = not controller_enabled
-                painter.set_controller_enabled(controller_enabled)
 
         for step in range(steps_per_frame):
 
@@ -155,3 +155,4 @@ def main_computed_torque() -> None:
 
 if __name__ == "__main__":
     main_pd(reference_angle_rad=math.pi)
+    # main_computed_torque()

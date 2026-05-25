@@ -20,7 +20,7 @@ class PendulumPainter:
         self.length_px = swing_radius_m * px_per_meter
         self.angle_rad = 0.0
         self.reference_angle_rad = 0.0
-        self.controller_enabled = True
+        self.instruction_text = ""
 
         self.background_color = (248, 249, 251)
         self.guide_color = (214, 220, 228)
@@ -36,9 +36,6 @@ class PendulumPainter:
     def set_reference_angle(self, angle_rad: float) -> None:
         self.reference_angle_rad = angle_rad % (2 * math.pi)
 
-    def set_controller_enabled(self, enabled: bool) -> None:
-        self.controller_enabled = enabled
-
     def position_from_angle(self, angle_rad: float) -> pygame.Vector2:
         # Pygame's screen y-axis points downward, so this maps from math xy
         # coordinates with +z out of the page into screen coordinates.
@@ -47,6 +44,13 @@ class PendulumPainter:
             math.cos(angle_rad) * self.length_px,
         )
         return self.center + offset
+
+    def angle_from_position(self, position: tuple[int, int]) -> float:
+        offset = pygame.Vector2(position) - self.center
+        return math.atan2(offset.x, offset.y) % (2 * math.pi)
+    
+    def set_instruction_text(self, text: str) -> None:
+        self.instruction_text = text
 
     def draw(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
         surface.fill(self.background_color)
@@ -105,7 +109,7 @@ class PendulumPainter:
         surface.blit(reference_label, (18, 38))
 
         controller_label = font.render(
-            f"controller: {'ON' if self.controller_enabled else 'OFF'} | SPACE toggles",
+            self.instruction_text,
             True,
             self.text_color,
         )
