@@ -48,3 +48,16 @@ class Arm2D:
         Ox3 = Ox2 + self.length3 * math.cos(angle3)
         Oy3 = Oy2 + self.length3 * math.sin(angle3)
         return (Ox1, Oy1), (Ox2, Oy2), (Ox3, Oy3)
+
+    def IK(self, x_ee, y_ee, theta_ee) -> tuple[float, float, float, bool]:  # q1, q2, q3 in radians, is_reachable 
+        # This is a simple geometric IK for 3-DOF planar arm. It does not handle singularities or unreachable targets.
+        x_wrist = x_ee - self.length3 * math.cos(theta_ee)
+        y_wrist = y_ee - self.length3 * math.sin(theta_ee)
+        if not (abs(self.length1 - self.length2) + 0.01 <= math.sqrt(x_wrist**2 + y_wrist**2) <= self.length1 + self.length2 - 0.01):
+            return 0.0, 0.0, 0.0, False
+
+        cos_q2 = (x_wrist**2 + y_wrist**2 - self.length1**2 - self.length2**2) / (2 * self.length1 * self.length2)
+        q2 = math.atan2(-math.sqrt(1 - cos_q2**2), cos_q2)  # Elbow-up solution
+        q1 = math.atan2(y_wrist, x_wrist) + math.atan2(-self.length2 * math.sin(q2), self.length1 + self.length2 * math.cos(q2))
+        q3 = theta_ee - q1 - q2
+        return q1, q2, q3, True

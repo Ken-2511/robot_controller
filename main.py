@@ -191,6 +191,17 @@ def main_arm2d() -> None:
     mouse_start_screen = None
     mouse_start_world = None
 
+    def run_ik_once() -> None:
+        target_pose = painter.get_target_pose()
+        if target_pose is None:
+            return
+
+        _q1, _q2, _q3, is_reachable = arm.IK(*target_pose)
+        if is_reachable:
+            arm.q1, arm.q2, arm.q3 = _q1, _q2, _q3
+        else:
+            print("Target is unreachable.")
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -209,10 +220,8 @@ def main_arm2d() -> None:
                 elif event.key == pygame.K_d:
                     arm.q3 -= joint_step_rad
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                target_x, target_y = painter.screen_to_world(event.pos)
-                painter.set_target_position(target_x, target_y)
                 mouse_start_screen = event.pos
-                mouse_start_world = (target_x, target_y)
+                mouse_start_world = painter.screen_to_world(event.pos)
             elif event.type == pygame.MOUSEMOTION and mouse_start_screen is not None:
                 dx_px = event.pos[0] - mouse_start_screen[0]
                 dy_px = event.pos[1] - mouse_start_screen[1]
@@ -231,6 +240,29 @@ def main_arm2d() -> None:
                         theta_rad,
                     )
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if mouse_start_screen is not None:
+                    dx_px = event.pos[0] - mouse_start_screen[0]
+                    dy_px = event.pos[1] - mouse_start_screen[1]
+                    dragged_far_enough = (
+                        math.hypot(dx_px, dy_px) >= mouse_drag_threshold_px
+                    )
+
+                    if dragged_far_enough and mouse_start_world is not None:
+                        release_world = painter.screen_to_world(event.pos)
+                        dx_m = release_world[0] - mouse_start_world[0]
+                        dy_m = release_world[1] - mouse_start_world[1]
+                        theta_rad = math.atan2(dy_m, dx_m)
+                        painter.set_target_pose(
+                            mouse_start_world[0],
+                            mouse_start_world[1],
+                            theta_rad,
+                        )
+                    else:
+                        target_x, target_y = painter.screen_to_world(event.pos)
+                        painter.set_target_position(target_x, target_y)
+
+                    run_ik_once()
+
                 mouse_start_screen = None
                 mouse_start_world = None
 

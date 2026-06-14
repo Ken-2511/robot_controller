@@ -155,6 +155,9 @@ class Arm2D_Painter:
     def set_target_pose(self, x_m: float, y_m: float, theta_rad: float) -> None:
         self.target_pose = (x_m, y_m, theta_rad)
 
+    def get_target_pose(self):
+        return self.target_pose
+
     def set_target_position(self, x_m: float, y_m: float) -> None:
         theta_rad = 0.0
         if self.target_pose is not None:
