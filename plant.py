@@ -1,4 +1,6 @@
 import math
+from math import sin, cos
+import numpy as np
 from dataclasses import dataclass
 
 @dataclass
@@ -21,6 +23,12 @@ class Arm2D:
     mass1: float    # kg
     mass2: float
     mass3: float
+    inertia1: float       # kg*m^2, about the joint axis
+    inertia2: float
+    inertia3: float
+    com1: float     # m, assume to be along the link
+    com2: float
+    com3: float
     length1: float  # m
     length2: float
     length3: float
@@ -61,3 +69,15 @@ class Arm2D:
         q1 = math.atan2(y_wrist, x_wrist) + math.atan2(-self.length2 * math.sin(q2), self.length1 + self.length2 * math.cos(q2))
         q3 = theta_ee - q1 - q2
         return q1, q2, q3, True
+    
+    def equ_of_motion(self, tau1: float, tau2: float, tau3: float) -> tuple[float, float, float]:  # q1dd, q2dd, q3dd in rad/s^2
+        v_com1 = self.q1d * self.com1
+        v_com2 = np.array([-self.length1 * sin(self.q1) * self.q1d, self.length1 * cos(self.q1) * self.q1d]).T \
+            + np.array([[-sin(self.q1), -cos(self.q1), 0], [cos(self.q1), -sin(self.q1), 0], [0, 0, 0]]) @ np.array()
+        v_com3 = ...
+        kinetic_energy = 0.5 * (self.inertia1 * self.q1d**2 + self.inertia2 * (self.q1d + self.q2d) ** 2 + self.inertia3 * (self.q1d + self.q2d + self.q3d) ** 2)\
+            + 0.5 * (self.mass1 * v_com1**2 + self.mass2 * v_com2**2 + self.mass3 * v_com3**2)
+        potential_energy = self.mass1 * self.gravity * self.com1 * math.sin(self.q1) + \
+            self.mass2 * self.gravity * (self.length1 * math.sin(self.q1) + self.com2 * math.sin(self.q1 + self.q2)) + \
+            self.mass3 * self.gravity * (self.length1 * math.sin(self.q1) + self.length2 * math.sin(self.q1 + self.q2) + self.com3 * math.sin(self.q1 + self.q2 + self.q3))
+        
