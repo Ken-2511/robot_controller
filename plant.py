@@ -72,8 +72,9 @@ class Arm2D:
     
     def equ_of_motion(self, tau1: float, tau2: float, tau3: float) -> tuple[float, float, float]:  # q1dd, q2dd, q3dd in rad/s^2
         v_com1 = self.q1d * self.com1
-        v_com2 = np.array([-self.length1 * sin(self.q1) * self.q1d, self.length1 * cos(self.q1) * self.q1d]).T \
-            + np.array([[-sin(self.q1), -cos(self.q1), 0], [cos(self.q1), -sin(self.q1), 0], [0, 0, 0]]) @ np.array()
+        v_com2 = np.array([-self.length1 * sin(self.q1), self.length1 * cos(self.q1), 0]).T * self.q1d \
+            + np.array([[-sin(self.q1), -cos(self.q1), 0], [cos(self.q1), -sin(self.q1), 0], [0, 0, 0]]) @ np.array([cos(self.q2), sin(self.q2), 0]).T * self.q1d * self.com2 \
+            + np.array([[cos(self.q1), -sin(self.q1), 0], [sin(self.q1), cos(self.q1), 0], [0, 0, 0]]) @ np.array([-sin(self.q2), cos(self.q2), 0]).T * self.q2d * self.com2
         v_com3 = ...
         kinetic_energy = 0.5 * (self.inertia1 * self.q1d**2 + self.inertia2 * (self.q1d + self.q2d) ** 2 + self.inertia3 * (self.q1d + self.q2d + self.q3d) ** 2)\
             + 0.5 * (self.mass1 * v_com1**2 + self.mass2 * v_com2**2 + self.mass3 * v_com3**2)
