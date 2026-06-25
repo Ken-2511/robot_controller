@@ -1,6 +1,6 @@
 from gui import Arm2D_Painter, PendulumPainter
 from plant import Arm2D, Pendulum
-from control import Pendulum_PD_Controller, Pendulum_CT_Controller
+from control import Arm2D_PD_Controller, Pendulum_PD_Controller, Pendulum_CT_Controller
 import ctypes
 import pygame
 import math
@@ -177,11 +177,11 @@ def main_arm2d() -> None:
     render_hz = 60
     sim_hz = 3000
     steps_per_frame = sim_hz // render_hz
-    joint_friction = (0.12, 0.08, 0.08)  # N*m*s/rad
+    target_pose = (0.55, 0.25, math.radians(0.0))
 
     enable_high_dpi()
     pygame.init()
-    pygame.display.set_caption("Arm2D Free Fall")
+    pygame.display.set_caption("Arm2D Joint PD")
 
     painter = Arm2D_Painter(canvas_height_px=WINDOW_HEIGHT_PX)
     screen = pygame.display.set_mode(
@@ -207,12 +207,25 @@ def main_arm2d() -> None:
         l2=0.35,
         l3=0.20,
         gravity=9.81,
-        q1=math.radians(35.0),
-        q2=math.radians(45.0),
-        q3=math.radians(-50.0),
+        q1=math.radians(-90.0),
+        q2=math.radians(0.0),
+        q3=math.radians(0.0),
         q1d=0.0,
         q2d=0.0,
         q3d=0.0,
+    )
+    q1r, q2r, q3r, is_reachable = arm.IK(*target_pose)
+    if not is_reachable:
+        raise RuntimeError("Target pose is unreachable.")
+
+    painter.set_target_pose(*target_pose)
+    controller = Arm2D_PD_Controller(
+        kp1=5.0,
+        kp2=4.0,
+        kp3=3.0,
+        kd1=3.0,
+        kd2=2.4,
+        kd3=1.8,
     )
 
     running = True
@@ -222,9 +235,15 @@ def main_arm2d() -> None:
                 running = False
 
         for _ in range(steps_per_frame):
-            tau1 = -joint_friction[0] * arm.q1d
-            tau2 = -joint_friction[1] * arm.q2d
-            tau3 = -joint_friction[2] * arm.q3d
+            tau1, tau2, tau3 = controller.compute_torque(
+                arm.q1, arm.q2, arm.q3,
+                arm.q1d, arm.q2d, arm.q3d,
+                q1r, q2r, q3r,
+            )
+            g1, g2, g3 = arm.gravity_vector()
+            tau1 += g1
+            tau2 += g2
+            tau3 += g3
             q1dd, q2dd, q3dd = arm.equ_of_motion(tau1, tau2, tau3)
             arm.q1d += q1dd / sim_hz
             arm.q2d += q2dd / sim_hz

@@ -70,19 +70,30 @@ class Arm2D:
         q3 = theta_ee - q1 - q2
         return q1, q2, q3, True
     
+    def gravity_vector(self) -> tuple[float, float, float]:
+        m1, m2, m3 = self.m1, self.m2, self.m3
+        l1, l2 = self.l1, self.l2
+        lc1, lc2, lc3 = self.lc1, self.lc2, self.lc3
+        g = self.gravity
+
+        c1 = math.cos(self.q1)
+        c12 = math.cos(self.q1 + self.q2)
+        c123 = math.cos(self.q1 + self.q2 + self.q3)
+        return (
+            g * ((m1 * lc1 + m2 * l1 + m3 * l1) * c1 + (m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
+            g * ((m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
+            g * m3 * lc3 * c123,
+        )
+
     def equ_of_motion(self, tau1: float, tau2: float, tau3: float) -> tuple[float, float, float]:  # q1dd, q2dd, q3dd in rad/s^2
         m1, m2, m3 = self.m1, self.m2, self.m3
         i1, i2, i3 = self.i1, self.i2, self.i3
         l1, l2 = self.l1, self.l2
         lc1, lc2, lc3 = self.lc1, self.lc2, self.lc3
-        g = self.gravity
 
         qd = np.array([self.q1d, self.q2d, self.q3d])
         tau = np.array([tau1, tau2, tau3])
 
-        c1 = math.cos(self.q1)
-        c12 = math.cos(self.q1 + self.q2)
-        c123 = math.cos(self.q1 + self.q2 + self.q3)
         c2 = math.cos(self.q2)
         c3 = math.cos(self.q3)
         c23 = math.cos(self.q2 + self.q3)
@@ -103,11 +114,7 @@ class Arm2D:
                       [m12, m22, m23],
                       [m13, m23, m33]])
 
-        G = np.array([
-            g * ((m1 * lc1 + m2 * l1 + m3 * l1) * c1 + (m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
-            g * ((m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
-            g * m3 * lc3 * c123,
-        ])
+        G = np.array(self.gravity_vector())
 
         dM = np.zeros((3, 3, 3))
         dM[1] = np.array([
