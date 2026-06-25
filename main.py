@@ -1,21 +1,40 @@
 from gui import Arm2D_Painter, PendulumPainter
 from plant import Arm2D, Pendulum
 from control import Pendulum_PD_Controller, Pendulum_CT_Controller
+import ctypes
 import pygame
 import math
+import sys
+
+
+WINDOW_HEIGHT_PX = 1000
+
+
+def enable_high_dpi() -> None:
+    if sys.platform != "win32":
+        return
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except (AttributeError, OSError):
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except (AttributeError, OSError):
+            pass
 
 
 def main_pd(reference_angle_rad: float) -> None:
     """
     PD Controller with a constant reference angle.
     """
-    canvas_size = 800
+    canvas_size = WINDOW_HEIGHT_PX
     pendulum_length_m = 1.0
     px_per_meter = 300
     render_hz = 60
     sim_hz = 3000
     steps_per_frame = sim_hz // render_hz
 
+    enable_high_dpi()
     pygame.init()
     pygame.display.set_caption("Pendulum Simulation")
     screen = pygame.display.set_mode((canvas_size, canvas_size))
@@ -76,13 +95,14 @@ def main_pd(reference_angle_rad: float) -> None:
 
 
 def main_computed_torque() -> None:
-    canvas_size = 800
+    canvas_size = WINDOW_HEIGHT_PX
     pendulum_length_m = 1.0
     px_per_meter = 300
     render_hz = 60
     sim_hz = 3000
     steps_per_frame = sim_hz // render_hz
     
+    enable_high_dpi()
     pygame.init()
     pygame.display.set_caption("Pendulum Simulation")
     screen = pygame.display.set_mode((canvas_size, canvas_size))
@@ -155,13 +175,15 @@ def main_computed_torque() -> None:
 
 def main_arm2d() -> None:
     render_hz = 60
-    joint_step_rad = math.radians(2.0)
-    mouse_drag_threshold_px = 6
+    sim_hz = 3000
+    steps_per_frame = sim_hz // render_hz
+    joint_friction = (0.12, 0.08, 0.08)  # N*m*s/rad
 
+    enable_high_dpi()
     pygame.init()
-    pygame.display.set_caption("Arm2D Viewer")
+    pygame.display.set_caption("Arm2D Free Fall")
 
-    painter = Arm2D_Painter()
+    painter = Arm2D_Painter(canvas_height_px=WINDOW_HEIGHT_PX)
     screen = pygame.display.set_mode(
         (painter.canvas_width_px, painter.canvas_height_px)
     )
@@ -194,83 +216,22 @@ def main_arm2d() -> None:
     )
 
     running = True
-    mouse_start_screen = None
-    mouse_start_world = None
-
-    def run_ik_once() -> None:
-        target_pose = painter.get_target_pose()
-        if target_pose is None:
-            return
-
-        _q1, _q2, _q3, is_reachable = arm.IK(*target_pose)
-        if is_reachable:
-            arm.q1, arm.q2, arm.q3 = _q1, _q2, _q3
-        else:
-            print("Target is unreachable.")
-
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    arm.q1 += joint_step_rad
-                elif event.key == pygame.K_a:
-                    arm.q1 -= joint_step_rad
-                elif event.key == pygame.K_w:
-                    arm.q2 += joint_step_rad
-                elif event.key == pygame.K_s:
-                    arm.q2 -= joint_step_rad
-                elif event.key == pygame.K_e:
-                    arm.q3 += joint_step_rad
-                elif event.key == pygame.K_d:
-                    arm.q3 -= joint_step_rad
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_start_screen = event.pos
-                mouse_start_world = painter.screen_to_world(event.pos)
-            elif event.type == pygame.MOUSEMOTION and mouse_start_screen is not None:
-                dx_px = event.pos[0] - mouse_start_screen[0]
-                dy_px = event.pos[1] - mouse_start_screen[1]
 
-                if math.hypot(dx_px, dy_px) >= mouse_drag_threshold_px:
-                    current_world = painter.screen_to_world(event.pos)
-                    if mouse_start_world is None:
-                        continue
-
-                    dx_m = current_world[0] - mouse_start_world[0]
-                    dy_m = current_world[1] - mouse_start_world[1]
-                    theta_rad = math.atan2(dy_m, dx_m)
-                    painter.set_target_pose(
-                        mouse_start_world[0],
-                        mouse_start_world[1],
-                        theta_rad,
-                    )
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                if mouse_start_screen is not None:
-                    dx_px = event.pos[0] - mouse_start_screen[0]
-                    dy_px = event.pos[1] - mouse_start_screen[1]
-                    dragged_far_enough = (
-                        math.hypot(dx_px, dy_px) >= mouse_drag_threshold_px
-                    )
-
-                    if dragged_far_enough and mouse_start_world is not None:
-                        release_world = painter.screen_to_world(event.pos)
-                        dx_m = release_world[0] - mouse_start_world[0]
-                        dy_m = release_world[1] - mouse_start_world[1]
-                        theta_rad = math.atan2(dy_m, dx_m)
-                        painter.set_target_pose(
-                            mouse_start_world[0],
-                            mouse_start_world[1],
-                            theta_rad,
-                        )
-                    else:
-                        target_x, target_y = painter.screen_to_world(event.pos)
-                        painter.set_target_position(target_x, target_y)
-
-                    run_ik_once()
-
-                mouse_start_screen = None
-                mouse_start_world = None
+        for _ in range(steps_per_frame):
+            tau1 = -joint_friction[0] * arm.q1d
+            tau2 = -joint_friction[1] * arm.q2d
+            tau3 = -joint_friction[2] * arm.q3d
+            q1dd, q2dd, q3dd = arm.equ_of_motion(tau1, tau2, tau3)
+            arm.q1d += q1dd / sim_hz
+            arm.q2d += q2dd / sim_hz
+            arm.q3d += q3dd / sim_hz
+            arm.q1 += arm.q1d / sim_hz
+            arm.q2 += arm.q2d / sim_hz
+            arm.q3 += arm.q3d / sim_hz
 
         painter.draw(render_surface, font, arm)
         pygame.transform.smoothscale(

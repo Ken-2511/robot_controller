@@ -23,7 +23,7 @@ class Arm2D:
     m1: float    # kg
     m2: float
     m3: float
-    i1: float       # kg*m^2, about the joint axis
+    i1: float       # kg*m^2, about the link center of mass
     i2: float
     i3: float
     lc1: float     # m, assume to be along the link
@@ -71,19 +71,61 @@ class Arm2D:
         return q1, q2, q3, True
     
     def equ_of_motion(self, tau1: float, tau2: float, tau3: float) -> tuple[float, float, float]:  # q1dd, q2dd, q3dd in rad/s^2
-        w1 = self.q1d
-        w2 = self.q1d + self.q2d
-        w3 = self.q1d + self.q2d + self.q3d
-        v_com1_sq = (w1 * self.lc1) ** 2
-        v_com2_sq = (w1 * self.l1) ** 2 + (w2 * self.lc2) ** 2\
-            + 2 * self.l1 * self.lc2 * w1 * w2 * math.cos(self.q2)
-        v_com3_sq = (w1 * self.l1) ** 2 + (w2 * self.l2) ** 2 + (w3 * self.lc3) ** 2\
-            + 2 * self.l1 * self.l2 * w1 * w2 * math.cos(self.q2)\
-            + 2 * self.l1 * self.lc3 * w1 * w3 * math.cos(self.q2 + self.q3)\
-            + 2 * self.l2 * self.lc3 * w2 * w3 * math.cos(self.q3)
-        kinetic_energy = 0.5 * (self.m1 * v_com1_sq + self.m2 * v_com2_sq + self.m3 * v_com3_sq) + \
-            0.5 * (self.i1 * w1 ** 2 + self.i2 * w2 ** 2 + self.i3 * w3 ** 2)
-        potential_energy = self.m1 * self.gravity * self.lc1 * math.sin(self.q1) + \
-            self.m2 * self.gravity * (self.l1 * math.sin(self.q1) + self.lc2 * math.sin(self.q1 + self.q2)) + \
-            self.m3 * self.gravity * (self.l1 * math.sin(self.q1) + self.l2 * math.sin(self.q1 + self.q2) + self.lc3 * math.sin(self.q1 + self.q2 + self.q3))
-        
+        m1, m2, m3 = self.m1, self.m2, self.m3
+        i1, i2, i3 = self.i1, self.i2, self.i3
+        l1, l2 = self.l1, self.l2
+        lc1, lc2, lc3 = self.lc1, self.lc2, self.lc3
+        g = self.gravity
+
+        qd = np.array([self.q1d, self.q2d, self.q3d])
+        tau = np.array([tau1, tau2, tau3])
+
+        c1 = math.cos(self.q1)
+        c12 = math.cos(self.q1 + self.q2)
+        c123 = math.cos(self.q1 + self.q2 + self.q3)
+        c2 = math.cos(self.q2)
+        c3 = math.cos(self.q3)
+        c23 = math.cos(self.q2 + self.q3)
+        s2 = math.sin(self.q2)
+        s3 = math.sin(self.q3)
+        s23 = math.sin(self.q2 + self.q3)
+
+        m11 = i1 + i2 + i3 + m1 * lc1**2 + \
+            m2 * (l1**2 + lc2**2 + 2 * l1 * lc2 * c2) + \
+            m3 * (l1**2 + l2**2 + lc3**2 + 2 * l1 * l2 * c2 + 2 * l1 * lc3 * c23 + 2 * l2 * lc3 * c3)
+        m12 = i2 + i3 + m2 * (lc2**2 + l1 * lc2 * c2) + \
+            m3 * (l2**2 + lc3**2 + l1 * l2 * c2 + l1 * lc3 * c23 + 2 * l2 * lc3 * c3)
+        m13 = i3 + m3 * (lc3**2 + l1 * lc3 * c23 + l2 * lc3 * c3)
+        m22 = i2 + i3 + m2 * lc2**2 + m3 * (l2**2 + lc3**2 + 2 * l2 * lc3 * c3)
+        m23 = i3 + m3 * (lc3**2 + l2 * lc3 * c3)
+        m33 = i3 + m3 * lc3**2
+        M = np.array([[m11, m12, m13],
+                      [m12, m22, m23],
+                      [m13, m23, m33]])
+
+        G = np.array([
+            g * ((m1 * lc1 + m2 * l1 + m3 * l1) * c1 + (m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
+            g * ((m2 * lc2 + m3 * l2) * c12 + m3 * lc3 * c123),
+            g * m3 * lc3 * c123,
+        ])
+
+        dM = np.zeros((3, 3, 3))
+        dM[1] = np.array([
+            [-2 * m2 * l1 * lc2 * s2 - 2 * m3 * l1 * (l2 * s2 + lc3 * s23), -m2 * l1 * lc2 * s2 - m3 * l1 * (l2 * s2 + lc3 * s23), -m3 * l1 * lc3 * s23],
+            [-m2 * l1 * lc2 * s2 - m3 * l1 * (l2 * s2 + lc3 * s23), 0.0, 0.0],
+            [-m3 * l1 * lc3 * s23, 0.0, 0.0],
+        ])
+        dM[2] = np.array([
+            [-2 * m3 * lc3 * (l1 * s23 + l2 * s3), -m3 * lc3 * (l1 * s23 + 2 * l2 * s3), -m3 * lc3 * (l1 * s23 + l2 * s3)],
+            [-m3 * lc3 * (l1 * s23 + 2 * l2 * s3), -2 * m3 * l2 * lc3 * s3, -m3 * l2 * lc3 * s3],
+            [-m3 * lc3 * (l1 * s23 + l2 * s3), -m3 * l2 * lc3 * s3, 0.0],
+        ])
+
+        C = np.zeros(3)
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    C[i] += 0.5 * (dM[k, i, j] + dM[j, i, k] - dM[i, j, k]) * qd[j] * qd[k]
+
+        qdd = np.linalg.solve(M, tau - C - G)
+        return float(qdd[0]), float(qdd[1]), float(qdd[2])

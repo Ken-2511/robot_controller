@@ -127,10 +127,10 @@ class Arm2D_Painter:
     - 0 radians points horizontally right.
     """
 
-    def __init__(self) -> None:
-        self.world_min = (-0.2, -0.1)
-        self.world_max = (1.6, 1.0)
-        self.canvas_height_px = 800
+    def __init__(self, canvas_height_px: int = 800) -> None:
+        self.world_min = (-1.05, -1.05)
+        self.world_max = (1.05, 1.05)
+        self.canvas_height_px = canvas_height_px
         self.render_scale = 2
 
         world_width_m = self.world_max[0] - self.world_min[0]
