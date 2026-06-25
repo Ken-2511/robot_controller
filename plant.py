@@ -20,18 +20,18 @@ class Pendulum:
 @dataclass
 class Arm2D:
     # static
-    mass1: float    # kg
-    mass2: float
-    mass3: float
-    inertia1: float       # kg*m^2, about the joint axis
-    inertia2: float
-    inertia3: float
-    com1: float     # m, assume to be along the link
-    com2: float
-    com3: float
-    length1: float  # m
-    length2: float
-    length3: float
+    m1: float    # kg
+    m2: float
+    m3: float
+    i1: float       # kg*m^2, about the joint axis
+    i2: float
+    i3: float
+    lc1: float     # m, assume to be along the link
+    lc2: float
+    lc3: float
+    l1: float  # m
+    l2: float
+    l3: float
     gravity: float  # m/s^2
     # dynamic
     q1: float       # rad
@@ -49,36 +49,41 @@ class Arm2D:
         angle2 = self.q1 + self.q2
         angle3 = self.q1 + self.q2 + self.q3
 
-        Ox1 = self.length1 * math.cos(angle1)
-        Oy1 = self.length1 * math.sin(angle1)
-        Ox2 = Ox1 + self.length2 * math.cos(angle2)
-        Oy2 = Oy1 + self.length2 * math.sin(angle2)
-        Ox3 = Ox2 + self.length3 * math.cos(angle3)
-        Oy3 = Oy2 + self.length3 * math.sin(angle3)
+        Ox1 = self.l1 * math.cos(angle1)
+        Oy1 = self.l1 * math.sin(angle1)
+        Ox2 = Ox1 + self.l2 * math.cos(angle2)
+        Oy2 = Oy1 + self.l2 * math.sin(angle2)
+        Ox3 = Ox2 + self.l3 * math.cos(angle3)
+        Oy3 = Oy2 + self.l3 * math.sin(angle3)
         return (Ox1, Oy1), (Ox2, Oy2), (Ox3, Oy3)
 
     def IK(self, x_ee, y_ee, theta_ee) -> tuple[float, float, float, bool]:  # q1, q2, q3 in radians, is_reachable 
         # This is a simple geometric IK for 3-DOF planar arm. It does not handle singularities or unreachable targets.
-        x_wrist = x_ee - self.length3 * math.cos(theta_ee)
-        y_wrist = y_ee - self.length3 * math.sin(theta_ee)
-        if not (abs(self.length1 - self.length2) + 0.01 <= math.sqrt(x_wrist**2 + y_wrist**2) <= self.length1 + self.length2 - 0.01):
+        x_wrist = x_ee - self.l3 * math.cos(theta_ee)
+        y_wrist = y_ee - self.l3 * math.sin(theta_ee)
+        if not (abs(self.l1 - self.l2) + 0.01 <= math.sqrt(x_wrist**2 + y_wrist**2) <= self.l1 + self.l2 - 0.01):
             return 0.0, 0.0, 0.0, False
 
-        cos_q2 = (x_wrist**2 + y_wrist**2 - self.length1**2 - self.length2**2) / (2 * self.length1 * self.length2)
+        cos_q2 = (x_wrist**2 + y_wrist**2 - self.l1**2 - self.l2**2) / (2 * self.l1 * self.l2)
         q2 = math.atan2(-math.sqrt(1 - cos_q2**2), cos_q2)  # Elbow-up solution
-        q1 = math.atan2(y_wrist, x_wrist) + math.atan2(-self.length2 * math.sin(q2), self.length1 + self.length2 * math.cos(q2))
+        q1 = math.atan2(y_wrist, x_wrist) + math.atan2(-self.l2 * math.sin(q2), self.l1 + self.l2 * math.cos(q2))
         q3 = theta_ee - q1 - q2
         return q1, q2, q3, True
     
     def equ_of_motion(self, tau1: float, tau2: float, tau3: float) -> tuple[float, float, float]:  # q1dd, q2dd, q3dd in rad/s^2
-        v_com1 = self.q1d * self.com1
-        v_com2 = np.array([-self.length1 * sin(self.q1), self.length1 * cos(self.q1), 0]).T * self.q1d \
-            + np.array([[-sin(self.q1), -cos(self.q1), 0], [cos(self.q1), -sin(self.q1), 0], [0, 0, 0]]) @ np.array([cos(self.q2), sin(self.q2), 0]).T * self.q1d * self.com2 \
-            + np.array([[cos(self.q1), -sin(self.q1), 0], [sin(self.q1), cos(self.q1), 0], [0, 0, 0]]) @ np.array([-sin(self.q2), cos(self.q2), 0]).T * self.q2d * self.com2
-        v_com3 = ...
-        kinetic_energy = 0.5 * (self.inertia1 * self.q1d**2 + self.inertia2 * (self.q1d + self.q2d) ** 2 + self.inertia3 * (self.q1d + self.q2d + self.q3d) ** 2)\
-            + 0.5 * (self.mass1 * v_com1**2 + self.mass2 * v_com2**2 + self.mass3 * v_com3**2)
-        potential_energy = self.mass1 * self.gravity * self.com1 * math.sin(self.q1) + \
-            self.mass2 * self.gravity * (self.length1 * math.sin(self.q1) + self.com2 * math.sin(self.q1 + self.q2)) + \
-            self.mass3 * self.gravity * (self.length1 * math.sin(self.q1) + self.length2 * math.sin(self.q1 + self.q2) + self.com3 * math.sin(self.q1 + self.q2 + self.q3))
+        w1 = self.q1d
+        w2 = self.q1d + self.q2d
+        w3 = self.q1d + self.q2d + self.q3d
+        v_com1_sq = (w1 * self.lc1) ** 2
+        v_com2_sq = (w1 * self.l1) ** 2 + (w2 * self.lc2) ** 2\
+            + 2 * self.l1 * self.lc2 * w1 * w2 * math.cos(self.q2)
+        v_com3_sq = (w1 * self.l1) ** 2 + (w2 * self.l2) ** 2 + (w3 * self.lc3) ** 2\
+            + 2 * self.l1 * self.l2 * w1 * w2 * math.cos(self.q2)\
+            + 2 * self.l1 * self.lc3 * w1 * w3 * math.cos(self.q2 + self.q3)\
+            + 2 * self.l2 * self.lc3 * w2 * w3 * math.cos(self.q3)
+        kinetic_energy = 0.5 * (self.m1 * v_com1_sq + self.m2 * v_com2_sq + self.m3 * v_com3_sq) + \
+            0.5 * (self.i1 * w1 ** 2 + self.i2 * w2 ** 2 + self.i3 * w3 ** 2)
+        potential_energy = self.m1 * self.gravity * self.lc1 * math.sin(self.q1) + \
+            self.m2 * self.gravity * (self.l1 * math.sin(self.q1) + self.lc2 * math.sin(self.q1 + self.q2)) + \
+            self.m3 * self.gravity * (self.l1 * math.sin(self.q1) + self.l2 * math.sin(self.q1 + self.q2) + self.lc3 * math.sin(self.q1 + self.q2 + self.q3))
         
